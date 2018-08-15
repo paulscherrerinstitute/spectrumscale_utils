@@ -95,3 +95,33 @@ def get_timeseries_from_mmrepquota(datadir, quantity="blockUsage", groupby="file
     
     print("Read %d points" % points)
     return dfs
+
+
+def get_timeseries_from_policy(f):
+    """Get a pandas DataFrame from a policy scan such as:
+
+    RULE 'listall' list 'all-files'  
+    SHOW( varchar(kb_allocated) || ' * ' || varchar(file_size) || ' * ' || varchar(user_id) || ' * ' || fileset_name || ' * ' || varchar(creation_time) )
+
+    
+    Parameters
+    ----------
+    f : str
+        file containing the policy output
+    
+    Returns
+    -------
+    pandas DataFrame
+    """
+
+    headers = ["Inode number", "gen number", "Snapshot ID", ]
+    headers += ["kb_allocated", "sep1", "filesize", "sep2", "user_id", "sep3", "fileset_name", "sep4", "creation_date", "creation_time"]
+    headers += ["Seperator", "Filename"]
+
+    df = pd.read_csv(f, sep=r"\s+", names=headers, )
+
+    df["date"] = df["creation_date"] + " " + df["creation_time"]
+    df["date"] = pd.to_datetime(df["date"])
+    df2 = df.set_index("date")
+    df2.sort_index(inplace=True)
+    return df2

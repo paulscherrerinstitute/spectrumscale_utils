@@ -35,12 +35,10 @@ def get_data_from_mmrepquota(f, groupby="filesetname"):
     return data_usage_group
 
 
-def get_timeseries_from_mmrepquota(datadir, quantity="blockUsage", groupby="filesetname", points_per_dir=1):
+def get_timeseries_from_mmrepquota(datadir, quantity="blockUsage", groupby="filesetname", points_per_dir=1, fname="mmrepquota-j.txt"):
     """Creates a pandas timeseries from a directory containing outputs of mmrepquota command. It is assuming the following 
-    directory structure: <datadir>/<date>/<hour>/mmrepquota-g.txt, e.g. usage/2018-01-01/00/mmrepquota-g.txt.
-
+    directory structure: <datadir>/<date>/<hour>/fname, e.g. usage/2018-01-01/00/mmrepquota-g.txt.
     It assumes no new filesets or filesystems are created over time
-
     It returns a dictionary of DataFrames, indexed using the groupby argument
     
     Parameters
@@ -53,7 +51,9 @@ def get_timeseries_from_mmrepquota(datadir, quantity="blockUsage", groupby="file
         on which field to index (the default is "filesetname", it can also be filesystemName)
     points_per_dir : int, optional
         how many data points per date to use (the default is 1). This depends on the directory structure described above
-    
+    fname : str, optional
+        name of the file containing the information from mmrepquota -g or -j
+
     Returns
     -------
     dict of Dataframes
@@ -66,27 +66,35 @@ def get_timeseries_from_mmrepquota(datadir, quantity="blockUsage", groupby="file
 
     for d in dates:
         for hour in os.listdir(datadir + "/" + d):
-            df_t = get_data_from_mmrepquota(datadir + "/" + d + "/" + hour + "/mmrepquota-g.txt", groupby=groupby)
+            df_t = get_data_from_mmrepquota(datadir + "/" + d + "/" + hour + "/mmrepquota-j.txt", groupby=groupby)
     
             if df_t is None:
                 continue
     
             # this assumes no new filesets are created over time
-            if dfs == {}:
-                dfs = dict([(k, pd.DataFrame()) for k in df_t.keys()])
+            #if dfs == {}:
+            #    dfs = dict([(k, pd.DataFrame()) for k in df_t.keys()])
     
             for k in df_t.keys():
                 # skip root fileset, as it has the same name 
-                if k == "root":
+                if k in ["COMMON", "root"]:
                     continue
                 
-                cname = d + " %d:00:00" % int(hour)
+                cname = d + " %02d:00:00" % int(hour)
                 serie = df_t[k][quantity]
                 serie.name = cname
                 if k not in dfs:
                     dfs[k] = serie 
                 else:
-                    dfs[k] = pd.concat([dfs[k], serie], axis=1, sort=True)
+                #    print("-------------- {}".format(k))
+                #    print(dfs[k])
+                #    print(serie)
+                    #return dfs, serie
+                    #try:
+                    dfs[k] = pd.concat([dfs[k][~dfs[k].index.duplicated()], serie[~serie.index.duplicated()]], axis=1, sort=True)
+                    #except:
+                    #    print(dfs, dfs[k][dfs[k].index.duplicated()])
+                    #    return
                 #print(k, ",", dfs[k][cname].sum(), df_t[k][quantity].sum())
 
             points += 1
@@ -98,9 +106,77 @@ def get_timeseries_from_mmrepquota(datadir, quantity="blockUsage", groupby="file
         dfs[k].columns = pd.to_datetime(dfs[k].columns)
         dfs[k] = dfs[k].T
         dfs[k].sort_index(inplace=True)
+        dfs[k].index = pd.to_datetime(dfs[k].index)
     
     print("Read %d points" % points)
     return dfs
+    
+# def get_timeseries_from_mmrepquota(datadir, quantity="blockUsage", groupby="filesetname", points_per_dir=1):
+#     """Creates a pandas timeseries from a directory containing outputs of mmrepquota command. It is assuming the following 
+#     directory structure: <datadir>/<date>/<hour>/mmrepquota-g.txt, e.g. usage/2018-01-01/00/mmrepquota-g.txt.
+
+#     It assumes no new filesets or filesystems are created over time
+
+#     It returns a dictionary of DataFrames, indexed using the groupby argument
+    
+#     Parameters
+#     ----------
+#     datadir : str
+#         directory containing the required output files from Spectrum Scale
+#     quantity : str, optional
+#         which quantity to use in the DataFrame (the default is "blockUsage", which counts used space)
+#     groupby : str, optional
+#         on which field to index (the default is "filesetname", it can also be filesystemName)
+#     points_per_dir : int, optional
+#         how many data points per date to use (the default is 1). This depends on the directory structure described above
+    
+#     Returns
+#     -------
+#     dict of Dataframes
+#         dictionary of DataFrames, indexed using the groupby argument
+#     """
+
+#     dfs = {}
+#     points = 0
+#     dates = [i for i in os.listdir(datadir)]
+
+#     for d in dates:
+#         for hour in os.listdir(datadir + "/" + d):
+#             df_t = get_data_from_mmrepquota(datadir + "/" + d + "/" + hour + "/mmrepquota-g.txt", groupby=groupby)
+    
+#             if df_t is None:
+#                 continue
+    
+#             # this assumes no new filesets are created over time
+#             if dfs == {}:
+#                 dfs = dict([(k, pd.DataFrame()) for k in df_t.keys()])
+    
+#             for k in df_t.keys():
+#                 # skip root fileset, as it has the same name 
+#                 if k == "root":
+#                     continue
+                
+#                 cname = d + " %d:00:00" % int(hour)
+#                 serie = df_t[k][quantity]
+#                 serie.name = cname
+#                 if k not in dfs:
+#                     dfs[k] = serie 
+#                 else:
+#                     dfs[k] = pd.concat([dfs[k], serie], axis=1, sort=True)
+#                 #print(k, ",", dfs[k][cname].sum(), df_t[k][quantity].sum())
+
+#             points += 1
+    
+#             if points_per_dir <= points:
+#                 break
+    
+#     for k in dfs.keys():
+#         dfs[k].columns = pd.to_datetime(dfs[k].columns)
+#         dfs[k] = dfs[k].T
+#         dfs[k].sort_index(inplace=True)
+    
+#     print("Read %d points" % points)
+#     return dfs
 
 
 def get_timeseries_from_policy(f, header, index_date="CREATION", drop_separators=True):

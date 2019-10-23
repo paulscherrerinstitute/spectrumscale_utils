@@ -179,7 +179,7 @@ def get_timeseries_from_mmrepquota(datadir, quantity="blockUsage", groupby="file
 #     return dfs
 
 
-def get_timeseries_from_policy(f, header, index_date="CREATION", drop_separators=True):
+def get_timeseries_from_policy(f, header, index_date="CREATION_DATE", drop_separators=True, encoding="unicode_escape", nrows=None):
     """Get a pandas DataFrame from a policy scan such as:
 
     RULE 'listall' list 'all-files'  
@@ -209,11 +209,18 @@ def get_timeseries_from_policy(f, header, index_date="CREATION", drop_separators
     #headers += ["kb_allocated", "sep1", "filesize", "sep2", "user_id", "sep3", "fileset_name", "sep4", "creation_date", "creation_time"]
     headers += ["Filename"]
 
-    df = pd.read_csv(f, sep=r"\s+", names=headers, )
+    dates = [h for h in headers if h.find("_DATE") != -1]
+    df = pd.read_csv(f, sep=r"\s+", names=headers, encoding=encoding, error_bad_lines=False, nrows=nrows)
 
-    df["date"] = df[index_date + "_DATE"] + " " + df[index_date + "_TIME"]
-    df["date"] = pd.to_datetime(df["date"])
-    df2 = df.set_index("date")
+    # this is not terribly efficient, it is done to deal with some peculiarities of policy output format (and take into account of
+    # weird chars in filenames, e.g. commas)
+    for h in dates:
+        df[h] = df[h] + " " + df[h.replace("DATE", "TIME")]
+        df[h] = pd.to_datetime(df[h])
+        df.drop(h.replace("DATE", "TIME"), inplace=True, axis=1)
+    #df["date"] = df[index_date + "_DATE"] + " " + df[index_date + "_TIME"]
+    #df["date"] = pd.to_datetime(df["date"])
+    df2 = df.set_index(index_date)
     df2.sort_index(inplace=True)
     if drop_separators:
         for sep in seps:

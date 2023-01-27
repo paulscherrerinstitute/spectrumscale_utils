@@ -7,4 +7,3 @@ A small set of tools for exploring usage etc on Spectrum Scale filesystems, most
 - `get_data_from_iohist`: Get data from `mmdiag --iohist`
 
 see each method documentation for more info.
-
